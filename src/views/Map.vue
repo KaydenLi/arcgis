@@ -1,5 +1,6 @@
 <template>
   <div id="map">
+    <!-- 搜索框 -->
     <div class="search-card">
       <div class="card-header">
         <span>数据查询</span>
@@ -17,19 +18,47 @@
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-select v-model="search.fileds" class="layer-item" multiple placeholder="请选择查询的域">
+          <el-select
+            v-model="search.fileds"
+            class="layer-item"
+            multiple
+            collapse-tags
+            placeholder="请选择查询的域"
+          >
             <el-option v-for="item in fileds" :key="item" :label="item" :value="item"></el-option>
           </el-select>
         </el-form-item>
         <el-form-item>
           <el-input v-model="search.text" class="layer-item" placeholder="输入字段">
-            <el-button id="searchBtn" slot="append" icon="el-icon-search"></el-button>
+            <el-button
+              id="searchBtn"
+              @click="findByAttr(search);"
+              slot="append"
+              icon="el-icon-search"
+            ></el-button>
           </el-input>
         </el-form-item>
       </el-form>
     </div>
+    <!-- /   搜索框 -->
 
+    <!-- 查询结果展示 -->
+    <el-dialog title="查询结果" :visible.sync="dialogTableVisible" top="50px">
+      <el-table :data="searchResult" stripe style="width: 100%" height="450">
+        <el-table-column prop="foundFieldName" label="域" width="100"></el-table-column>
+        <el-table-column prop="value" label="值"></el-table-column>
+        <el-table-column prop="layerName" label="图层名称"></el-table-column>
+        <el-table-column prop="layerId" label="图层ID" width="100"></el-table-column>
+      </el-table>
+      <div slot="footer" class="dialog-footer">
+        <el-button type="primary" @click="dialogTableVisible = false">确 定</el-button>
+      </div>
+    </el-dialog>
+    <!-- /   查询结果展示 -->
+
+    <!-- 地图界面 -->
     <div ref="mapContainer" class="map"></div>
+    <!-- /   地图界面 -->
   </div>
 </template>
 
@@ -49,7 +78,8 @@ export default {
       },
       searchStatus: true,
       searchResult: [],
-      layers: []
+      layers: [],
+      dialogTableVisible: false
     };
   },
   computed: {
@@ -64,67 +94,70 @@ export default {
   methods: {
     toogleSearch() {
       this.searchStatus = !this.searchStatus;
+    },
+    findByAttr(search) {
+      //-------------查询----------------//
+      //属性查询
+      loadModules([
+        "esri/Color",
+        "esri/tasks/FindTask",
+        "esri/tasks/FindParameters",
+        "esri/symbols/SimpleLineSymbol",
+        "esri/symbols/SimpleFillSymbol"
+      ])
+        .then(
+          ([
+            Color,
+            FindTask,
+            FindParameters,
+            SimpleLineSymbol,
+            SimpleFillSymbol
+          ]) => {
+            const findParameters = new FindParameters();
+            const layerId = parseInt(search.layer);
+            console.log("searchForm", search);
+            findParameters.returnGeometry = true;
+            findParameters.layerIds = [layerId];
+            findParameters.searchFields = search.fileds;
+            findParameters.searchText = search.text;
+            const findTask = new FindTask(baseUrl.baseLayer);
+            findTask.execute(findParameters).then(result => {
+              this.searchResult = result;
+              //查询工具
+              this.map.graphics.clear();
+              //线符号
+              const lineSymbol = new SimpleLineSymbol(
+                SimpleLineSymbol.STYLE_DASH,
+                new Color([255, 0, 0]),
+                2
+              );
+              //面符号
+              const fillSymbol = new SimpleFillSymbol(
+                SimpleFillSymbol.STYLE_SOLID,
+                lineSymbol
+              );
+              if (result.length == 0) {
+                this.$message.info("唯有查询到对应的数据");
+                return;
+              } else {
+                this.dialogTableVisible = true;
+                for (let i = 0; i < result.length; i++) {
+                  //获得图形graphic
+                  var graphic = result[i].feature;
+                  //赋予相应的符号
+                  graphic.setSymbol(fillSymbol);
+                  //将graphic添加到地图中，从而实现高亮效果
+                  this.map.graphics.add(graphic);
+                }
+              }
+            });
+            // console.log("map:", this.map);
+          }
+        )
+        .catch(err => {
+          window.console.log(err);
+        });
     }
-    // findByAttr(search) {
-    //   //-------------查询----------------//
-    //   //属性查询
-    //   loadModules([
-    //     "esri/symbols/SimpleLineSymbol",
-    //     "esri/symbols/SimpleFillSymbol"
-    //   ])
-    //     .then(
-    //       ([FindTask, FindParameters, SimpleLineSymbol, SimpleFillSymbol]) => {
-    //         const findParameters = new FindParameters();
-    //         // const layerId = parseInt(this.search.layer);
-    //         findParameters.returnGeometry = true;
-    //         // findParameters.layerIds = [layerId];
-    //         findParameters.layerIds = [
-    //           "customLayer0",
-    //           "customLayer1",
-    //           "customLayer2",
-    //           "customLayer3"
-    //         ];
-    //         findParameters.searchFields = this.search.fileds;
-    //         findParameters.searchText = this.search.text;
-    //         const findTask = new FindTask(baseUrl.baseMap);
-    //         findTask.execute(findParameters).then(showResult);
-    //         console.log("map:", this.map);
-    //         function showResult(result) {
-    //           console.log("result:", result);
-    //           // console.log("layer1:", this.map.getLayer("layer1"));
-    //           // //查询工具
-    //           // this.map.graphics.clear();
-    //           // //线符号
-    //           // const lineSymbol = new SimpleLineSymbol(
-    //           //   SimpleLineSymbol.STYLE_DASH,
-    //           //   new dojo.Color([0, 0, 255]),
-    //           //   3
-    //           // );
-    //           // //面符号
-    //           // const fillSymbol = new SimpleFillSymbol(
-    //           //   SimpleFillSymbol.STYLE_SOLID,
-    //           //   lineSymbol
-    //           // );
-    //           // if (result.length == 0) {
-    //           //   alert("未查询到任何信息");
-    //           //   return;
-    //           // } else {
-    //           //   for (let i = 0; i < result.length; i++) {
-    //           //     //获得图形graphic
-    //           //     var graphic = result[i].feature;
-    //           //     //赋予相应的符号
-    //           //     graphic.setSymbol(lineSymbol);
-    //           //     //将graphic添加到地图中，从而实现高亮效果
-    //           //     this.map.graphics.add(graphic);
-    //           //   }
-    //           // }
-    //         }
-    //       }
-    //     )
-    //     .catch(err => {
-    //       window.console.log(err);
-    //     });
-    // }
   },
   created() {
     this.layers = baseUrl.layers;
@@ -135,109 +168,35 @@ export default {
         "esri/map",
         "esri/layers/ArcGISDynamicMapServiceLayer",
         "esri/layers/FeatureLayer",
-        "esri/tasks/FindTask",
-        "esri/tasks/FindParameters",
-        "dojo/domReady!",
-        "dojo/query",
-        "dojo/on",
-        "esri/Color",
-        "esri/symbols/SimpleLineSymbol",
-        "esri/symbols/SimpleFillSymbol"
+        "dojo/domReady!"
       ],
       {
         url: baseUrl.apiUrl,
         css: baseUrl.cssUrl
       }
     )
-      .then(
-        ([
-          Map,
-          ArcGISDynamicMapServiceLayer,
-          FeatureLayer,
-          FindParameters,
-          FindTask,
-          SimpleLineSymbol,
-          SimpleFillSymbol,
-          query,
-          on,
-          Color
-        ]) => {
-          // 创建一个底图
-          this.map = new Map(this.$refs.mapContainer, {
-            basemap: "topo",
-            center: [118.99647, 31.50838], //南京城区
-            zoom: 10, // 当前地图缩放等级
-            logo: false
-          });
-          // 创建底图图层，并将图层添加到map中
-          const baseLayer = new ArcGISDynamicMapServiceLayer(baseUrl.baseMap);
-          this.map.addLayer(baseLayer);
-          // 创建图层,并将图层添加到map中
-          baseUrl.layers.forEach(async layer => {
-            this.map.addLayer(
-              await new FeatureLayer(layer.url, {
-                title: layer.title,
-                id: "customLayer" + layer.id
-              }),
-              layer.id
-            );
-          });
-
-          //查询工具
-          const findTask = new FindTask(baseUrl.baseMap);
-          //属性查询
-          const attrFinfd = function() {
-            console.log("begin-find");
-            const findParameters = new FindParameters();
-            const layerId = parseInt(this.search.layer);
-            findParameters.returnGeometry = true;
-            findParameters.layerIds = [layerId];
-            findParameters.layerIds = [
-              "customLayer0",
-              "customLayer1",
-              "customLayer2",
-              "customLayer3"
-            ];
-            findParameters.searchFields = this.search.fileds;
-            findParameters.searchText = this.search.text;
-            console.log("params:", findParameters);
-            findTask.execute(findParameters, showResult);
-          };
-          //属性查询渲染函数
-          const showResult = function(result) {
-            console("result:", result);
-            this.map.graphics.clear();
-            //线符号
-            var lineSymbol = new SimpleLineSymbol(
-              SimpleLineSymbol.STYLE_DASH,
-              new Color([0, 0, 255]),
-              3
-            );
-            //面符号
-            var fillSymbol = new SimpleFillSymbol(
-              SimpleFillSymbol.STYLE_SOLID,
-              lineSymbol
-            );
-            if (result.length == 0) {
-              alert("未查询到任何信息");
-              return;
-            } else {
-              for (var i = 0; i < result.length; i++) {
-                //获得图形graphic
-                var graphic = result[i].feature;
-                //赋予相应的符号
-                graphic.setSymbol(fillSymbol);
-                //将graphic添加到地图中，从而实现高亮效果
-                this.map.graphics.add(graphic);
-              }
-            }
-          };
-
-          const searchBtn = query("#searchBtn");
-          
-          on(searchBtn, "click", attrFinfd);
-        }
-      )
+      .then(([Map, ArcGISDynamicMapServiceLayer, FeatureLayer]) => {
+        // 创建一个底图
+        this.map = new Map(this.$refs.mapContainer, {
+          basemap: "topo",
+          center: [118.99647, 31.50838], //南京城区
+          zoom: 10, // 当前地图缩放等级
+          logo: false
+        });
+        // 创建底图图层，并将图层添加到map中
+        const baseLayer = new ArcGISDynamicMapServiceLayer(baseUrl.baseMap);
+        this.map.addLayer(baseLayer);
+        // 创建图层,并将图层添加到map中
+        baseUrl.layers.forEach(async layer => {
+          this.map.addLayer(
+            await new FeatureLayer(layer.url, {
+              title: layer.title,
+              id: "customLayer" + layer.id
+            }),
+            layer.id
+          );
+        });
+      })
       .catch(err => {
         window.console.log(err);
       });
@@ -278,5 +237,16 @@ export default {
 }
 .layer-item {
   width: 250px;
+}
+.result-show {
+  position: absolute;
+  left: 20px;
+  top: 50px;
+  z-index: 2;
+  width: 450px;
+  height: 450px;
+  padding: 10px;
+  border-radius: 5px;
+  background-color: #ccc;
 }
 </style>
